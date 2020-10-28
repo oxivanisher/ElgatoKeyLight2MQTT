@@ -56,7 +56,7 @@ class KeyLight2MQTT:
         self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
         self.mqtt_client.loop_start()
 
-        # self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
+        self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
 
         try:
             while True:
