@@ -46,9 +46,11 @@ class KeyLight2MQTT:
                     light.on()
                 else:
                     light.off()
-            elif what == "brightness":
+            if what == "brightness":
+                light.on()
                 light.brightness(int(msg.payload))
             elif what == "color":
+                light.on()
                 light.color(int(msg.payload))
 
     def discover_lights(self):
