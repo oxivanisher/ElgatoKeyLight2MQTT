@@ -30,9 +30,11 @@ class KeyLight2MQTT:
         if power == "on":
             if not state['on']:
                 light.on()
+                logging.info("Light on")
         else:
             if state['on']:
                 light.off()
+                logging.info("Light off")
 
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
@@ -57,10 +59,12 @@ class KeyLight2MQTT:
                 self.set_light_power(light, state)
                 if state['brightness'] != int(msg.payload):
                     light.brightness(int(msg.payload))
+                    logging.info("Brightness to %s" % msg.payload)
             elif what == "color":
                 self.set_light_power(light, state)
                 if state['temperature'] != int(msg.payload):
                     light.color(int(msg.payload))
+                    logging.info("Temperature to %s" % msg.payload)
 
     def discover_lights(self):
         lights_before = len(self.all_lights)
