@@ -26,6 +26,14 @@ class KeyLight2MQTT:
         self.all_lights = []
         self.last_light_discover = 0
 
+    def set_light_power(self, light, state, power="on"):
+        if power == "on":
+            if not state['isOn']:
+                light.on()
+        else:
+            if state['isOn']:
+                light.off()
+
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
 
@@ -35,23 +43,24 @@ class KeyLight2MQTT:
         logging.info("MQTT: Subscribing to %s" % topic)
         client.subscribe(topic)
 
-    # The callback for when a PUBLISH message is received from the server.
     def mqtt_on_message(self, client, userdata, msg):
         logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
         what = msg.topic.split("/")[-1]
         logging.info("Setting %s on elgato lights to %s" % (what, msg.payload))
         for light in self.all_lights:
+            # fetch current light state
+            state = light.info()
+
             if what == "power":
-                if msg.payload == "on":
-                    light.on()
-                else:
-                    light.off()
-            if what == "brightness":
-                light.on()
-                light.brightness(int(msg.payload))
+                self.set_light_power(light, state, msg.payload)
+            elif what == "brightness":
+                self.set_light_power(light, state)
+                if state.isBrightness != int(msg.payload):
+                    light.brightness(int(msg.payload))
             elif what == "color":
-                light.on()
-                light.color(int(msg.payload))
+                self.set_light_power(light, state)
+                if state.isTemperature != int(msg.payload):
+                    light.color(int(msg.payload))
 
     def discover_lights(self):
         lights_before = len(self.all_lights)
