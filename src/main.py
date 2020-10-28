@@ -54,14 +54,14 @@ class KeyLight2MQTT:
             state = light.info()
 
             if what == "power":
-                self.set_light_power(light, state, msg.payload)
+                self.set_light_power(light, state, str(msg.payload))
             elif what == "brightness":
-                self.set_light_power(light, state)
+                # self.set_light_power(light, state)
                 if state['brightness'] != int(msg.payload):
                     light.brightness(int(msg.payload))
                     logging.info("Brightness to %s" % msg.payload)
             elif what == "color":
-                self.set_light_power(light, state)
+                # self.set_light_power(light, state)
                 if state['temperature'] != int(msg.payload):
                     light.color(int(msg.payload))
                     logging.info("Temperature to %s" % msg.payload)
