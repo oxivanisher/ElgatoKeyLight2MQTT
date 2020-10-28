@@ -30,11 +30,11 @@ class KeyLight2MQTT:
         if power == "on":
             if not state['on']:
                 light.on()
-                logging.info("Light on")
+                logging.debug("Light on")
         else:
             if state['on']:
                 light.off()
-                logging.info("Light off")
+                logging.debug("Light off")
 
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
@@ -60,12 +60,12 @@ class KeyLight2MQTT:
                 value = int(value)
                 if state['brightness'] != value:
                     light.brightness(value)
-                    logging.info("Brightness to %s" % value)
+                    logging.debug("Brightness to %s" % value)
             elif what == "color":
                 value = int(value)
                 if state['temperature'] != value:
                     light.color(value)
-                    logging.info("Temperature to %s" % value)
+                    logging.debug("Temperature to %s" % value)
 
     def discover_lights(self):
         lights_before = len(self.all_lights)
@@ -95,32 +95,3 @@ class KeyLight2MQTT:
 if __name__ == "__main__":
     kl = KeyLight2MQTT()
     kl.run()
-
-
-# for _, ip := range elgatoKeyLights {
-#     reqBody = strings.NewReader(string(ba))
-#     s = fmt.Sprintf("http://%s:9123/elgato/lights", ip)
-#     req, err = http.NewRequest("PUT", s, reqBody)
-#     if err != nil {
-#         fmt.Printf("ERROR preparing Elgato KeyLight request: %s\n", err.Error())
-#     }
-#     //resp, err = httpClient.Do(req)
-
-#
-# type elgatoKeylightControlLight struct {
-#     On          int `json:"on"`
-#     Brightness  int `json:"brightness"`
-#     Temperature int `json:"temperature"`
-# }
-#
-# type elgatoKeylightControl struct {
-#     NumberOfLights int                          `json:"numberOfLights"`
-#     Lights         []elgatoKeylightControlLight `json:"lights"`
-# }
-#
-# type keyLightConfig struct {
-#     On          int
-#     Brightness  int
-#     Temperature int
-# }
-

@@ -1,0 +1,12 @@
+ersion: "3"
+services:
+  elgatokeyligt2mqtt:
+    container_name: elgatokeyligt2mqtt
+    restart: unless-stopped
+    build: .
+    environment:
+      - MQTT_SERVER
+      - MQTT_PORT
+      - MQTT_USER
+      - MQTT_PASSWORD
+      - MQTT_BASE_TOPIC
