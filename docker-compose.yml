@@ -10,3 +10,4 @@ services:
       - MQTT_USER
       - MQTT_PASSWORD
       - MQTT_BASE_TOPIC
+    network_mode: host
