@@ -47,9 +47,9 @@ class KeyLight2MQTT:
                 else:
                     light.off()
             elif what == "brightness":
-                light.brightness(msg.payload)
+                light.brightness(int(msg.payload))
             elif what == "color":
-                light.brightness(msg.color)
+                light.brightness(int(msg.color))
 
     def discover_lights(self):
         lights_before = len(self.all_lights)
