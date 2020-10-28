@@ -1,3 +1,2 @@
-zeroconf
 paho-mqtt
 leglight

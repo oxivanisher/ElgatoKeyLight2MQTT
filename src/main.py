@@ -1,22 +1,13 @@
 #!/usr/bin/env python3
 
 
-from zeroconf import ServiceBrowser, Zeroconf
 import paho.mqtt.client as mqtt
 import os
 import logging
+import leglight
+import time
+
 logging.basicConfig(level=logging.DEBUG)
-
-
-class BonjourListener:
-
-    def remove_service(self, zeroconf, type, name):
-        logging.debug("Bonjour: Service %s removed" % (name,))
-
-    def add_service(self, zeroconf, type, name):
-        info = zeroconf.get_service_info(type, name)
-        logging.debug("Bonjour: Service %s added, service info: %s" % (name, info))
-
 
 class KeyLight2MQTT:
 
@@ -27,16 +18,13 @@ class KeyLight2MQTT:
         self.mqtt_password = os.getenv('MQTT_PASSWORD', None)
         self.mqtt_base_topic = os.getenv('MQTT_BASE_TOPIC', 'ElgatoKeyLights')
 
-        self.zeroconf = Zeroconf()
-        self.bonjour_listener = BonjourListener()
-        # self.bonjour_browser = ServiceBrowser(self.zeroconf, "_http._tcp.local.", self.bonjour_listener)
-        self.bonjour_browser = ServiceBrowser(self.zeroconf, "_elg._tcp.local.", self.bonjour_listener)
-
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.mqtt_on_connect
         self.mqtt_client.on_message = self.mqtt_on_message
 
-        self.elgato_keylights = []
+        self.all_lights = []
+        self.last_light_discover = 0
+
 
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
@@ -48,6 +36,19 @@ class KeyLight2MQTT:
     # The callback for when a PUBLISH message is received from the server.
     def mqtt_on_message(self, client, userdata, msg):
         logging.info("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
+        print(msg.payload)
+        for light in self.all_lights:
+            logging.info("Setting light to")
+            # light.on()
+            # light.brightness(5)
+            # light.color(3400)
+
+    def discover_lights(self):
+        if time.time() - self.last_light_discover > 60:
+            logging.debug("Discover lights...")
+            self.all_lights = leglight.discover(2)
+            logging.debug("found %s lights" % len(self.all_lights))
+            self.last_light_discover = time.time()
 
     def run(self):
         if self.mqtt_user:
@@ -56,13 +57,12 @@ class KeyLight2MQTT:
         self.mqtt_client.loop_start()
 
         # self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
-        while True:
 
-            try:
-                input("Press enter to exit...\n\n")
-            finally:
-                self.zeroconf.close()
-                self.mqtt_client.loop_stop(force=False)
+        try:
+            while True:
+                self.discover_lights()
+        finally:
+            self.mqtt_client.loop_stop(force=False)
 
 
 if __name__ == "__main__":
