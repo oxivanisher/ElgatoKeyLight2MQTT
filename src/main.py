@@ -7,7 +7,8 @@ import logging
 import leglight
 import time
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
+
 
 class KeyLight2MQTT:
 
@@ -43,11 +44,14 @@ class KeyLight2MQTT:
             # light.color(3400)
 
     def discover_lights(self):
+        lights_before = len(self.all_lights)
         if time.time() - self.last_light_discover > 60:
             logging.debug("Discover lights...")
             self.all_lights = leglight.discover(2)
             logging.debug("found %s lights" % len(self.all_lights))
             self.last_light_discover = time.time()
+        if lights_before != len(self.all_lights):
+            logging.info("Number of found Elgato lights: %s" % len(self.all_lights))
 
     def run(self):
         if self.mqtt_user:
