@@ -29,11 +29,14 @@ class KeyLight2MQTT:
 
         self.zeroconf = Zeroconf()
         self.bonjour_listener = BonjourListener()
-        self.bonjour_browser = ServiceBrowser(self.zeroconf, "_http._tcp.local.", self.bonjour_listener)
+        # self.bonjour_browser = ServiceBrowser(self.zeroconf, "_http._tcp.local.", self.bonjour_listener)
+        self.bonjour_browser = ServiceBrowser(self.zeroconf, "_elg._tcp.local.", self.bonjour_listener)
 
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.mqtt_on_connect
         self.mqtt_client.on_message = self.mqtt_on_message
+
+        self.elgato_keylights = []
 
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
