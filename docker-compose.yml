@@ -1,4 +1,4 @@
-ersion: "3"
+version: "2"
 services:
   elgatokeyligt2mqtt:
     container_name: elgatokeyligt2mqtt
