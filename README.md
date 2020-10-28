@@ -25,3 +25,8 @@ The tool knows the following parameters, set as environment variable:
 | MQTT_USER       | None            |
 | MQTT_PASSWORD   |                 |
 | MQTT_BASE_TOPIC | ElgatoKeyLights |
+
+## Docker
+Although this repository supplies a `Dockerfile` as well as a `docker-compose.yml`, it will only work when you forward the mdns packages. Possible solution from [stack overflow](https://stackoverflow.com/questions/30646943/how-to-avahi-browse-from-a-docker-container) is to use `mdns-repeater`:
+
+`mdns-repeater eth1 docker0`
