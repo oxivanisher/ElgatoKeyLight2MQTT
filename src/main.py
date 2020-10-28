@@ -48,7 +48,7 @@ class KeyLight2MQTT:
     def mqtt_on_message(self, client, userdata, msg):
         logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
         what = msg.topic.split("/")[-1]
-        logging.info("Setting %s on elgato lights to %s" % (what, msg.payload))
+        logging.info("Setting %s on elgato lights to %s" % (what, str(msg.payload)))
         for light in self.all_lights:
             # fetch current light state
             state = light.info()
@@ -56,13 +56,11 @@ class KeyLight2MQTT:
             if what == "power":
                 self.set_light_power(light, state, str(msg.payload))
             elif what == "brightness":
-                # self.set_light_power(light, state)
                 value = int(msg.payload)
                 if state['brightness'] != value:
                     light.brightness(value)
                     logging.info("Brightness to %s" % value)
             elif what == "color":
-                # self.set_light_power(light, state)
                 value = int(msg.payload)
                 if state['temperature'] != value:
                     light.color(value)
