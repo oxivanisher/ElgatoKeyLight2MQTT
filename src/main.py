@@ -31,7 +31,7 @@ class KeyLight2MQTT:
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        topic = "%s/set" % self.mqtt_base_topic
+        topic = "%s/set/+" % self.mqtt_base_topic
         logging.info("MQTT: Subscribing to %s" % topic)
         client.subscribe(topic)
 
