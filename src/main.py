@@ -37,13 +37,19 @@ class KeyLight2MQTT:
 
     # The callback for when a PUBLISH message is received from the server.
     def mqtt_on_message(self, client, userdata, msg):
-        logging.info("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
-        print(msg.payload)
+        logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
+        what = msg.topic.split("/")[-1]
+        logging.info("Setting %s on elgato lights to %s" % (what, msg.payload))
         for light in self.all_lights:
-            logging.info("Setting light to")
-            # light.on()
-            # light.brightness(5)
-            # light.color(3400)
+            if what == "power":
+                if msg.payload == "on":
+                    light.on()
+                else:
+                    light.off()
+            elif what == "brightness":
+                light.brightness(msg.payload)
+            elif what == "color":
+                light.brightness(msg.color)
 
     def discover_lights(self):
         lights_before = len(self.all_lights)
