@@ -25,7 +25,6 @@ class KeyLight2MQTT:
         self.all_lights = []
         self.last_light_discover = 0
 
-
     def mqtt_on_connect(self, client, userdata, flags, rc):
         logging.info("MQTT: Connected with result code "+str(rc))
 
@@ -54,13 +53,13 @@ class KeyLight2MQTT:
         if self.mqtt_user:
             self.mqtt_client.username_pw_set(self.mqtt_user, self.mqtt_password)
         self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
-        self.mqtt_client.loop_start()
 
         self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
 
         try:
             while True:
                 self.discover_lights()
+                self.mqtt_client.loop()
         finally:
             self.mqtt_client.loop_stop(force=False)
 
