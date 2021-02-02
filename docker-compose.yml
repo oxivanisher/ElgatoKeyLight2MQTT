@@ -10,4 +10,5 @@ services:
       - MQTT_USER
       - MQTT_PASSWORD
       - MQTT_BASE_TOPIC
+      - DEBUG
     network_mode: host
