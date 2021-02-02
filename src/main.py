@@ -7,7 +7,13 @@ import logging
 import leglight
 import time
 
-logging.basicConfig(level=logging.INFO)
+
+log_level = logging.INFO
+if 'DEBUG' in os.environ.keys():
+    if os.environ['DEBUG'].lower() == "true":
+        log_level = logging.DEBUG
+
+logging.basicConfig(format='%(asctime)s %(message)s', level=log_level)
 
 
 class KeyLight2MQTT:
