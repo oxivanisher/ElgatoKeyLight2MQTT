@@ -12,7 +12,7 @@ log_level = logging.INFO
 if os.getenv('DEBUG', False):
     log_level = logging.DEBUG
 
-logging.basicConfig(format='%(asctime)s %(message)s', level=log_level)
+logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=log_level)
 
 
 class KeyLight2MQTT:
@@ -82,10 +82,12 @@ class KeyLight2MQTT:
         if time.time() - self.last_light_discover > 60:
             logging.debug("Starting to discover lights...")
             self.all_lights = leglight.discover(2)
-            logging.info("Talking to %s Elgato lights:" % len(self.all_lights))
             self.last_light_discover = time.time()
-            for light in self.all_lights:
-                logging.info("  %s" % light)
+
+            if lights_before != len(self.all_lights):
+                logging.info("Found %s Elgato lights:" % len(self.all_lights))
+                for light in self.all_lights:
+                    logging.info("  %s" % light)
 
     def run(self):
         if self.mqtt_user:
