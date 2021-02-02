@@ -76,6 +76,8 @@ class KeyLight2MQTT:
             self.last_light_discover = time.time()
         if lights_before != len(self.all_lights):
             logging.info("Number of found Elgato lights: %s" % len(self.all_lights))
+            for light in self.all_lights:
+                logging.info("  " % light.info)
 
     def run(self):
         if self.mqtt_user:
@@ -89,7 +91,7 @@ class KeyLight2MQTT:
                 self.discover_lights()
                 self.mqtt_client.loop()
         finally:
-            self.mqtt_client.loop_stop(force=False)
+            self.mqtt_client.loop_stop(force=True)
 
 
 if __name__ == "__main__":
