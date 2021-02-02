@@ -9,9 +9,8 @@ import time
 
 
 log_level = logging.INFO
-if 'DEBUG' in os.environ.keys():
-    if os.environ['DEBUG'].lower() == "true":
-        log_level = logging.DEBUG
+if os.getenv('DEBUG', False):
+    log_level = logging.DEBUG
 
 logging.basicConfig(format='%(asctime)s %(message)s', level=log_level)
 
@@ -47,20 +46,20 @@ class KeyLight2MQTT:
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        topic = "%s/set/+" % self.mqtt_base_topic
+        topic = "%s/set/#" % self.mqtt_base_topic
         logging.info("MQTT: Subscribing to %s" % topic)
         client.subscribe(topic)
 
     def mqtt_on_message(self, client, userdata, msg):
         logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
         what = msg.topic.split("/")[-1]
-        serial = msg.topic.split("/")[1]
+        serial = msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
         logging.info("Setting %s on elgato light %s to %s" % (what, serial, value))
         for light in self.all_lights:
-            if serial not in light:
+            if serial.lower() != light.serialNumber.lower():
                 # do nothing if we are the wrong light
-                return
+                continue
 
             # fetch current light state
             state = light.info()
@@ -81,12 +80,10 @@ class KeyLight2MQTT:
     def discover_lights(self):
         lights_before = len(self.all_lights)
         if time.time() - self.last_light_discover > 60:
-            logging.debug("Discover lights...")
+            logging.debug("Starting to discover lights...")
             self.all_lights = leglight.discover(2)
-            logging.debug("found %s lights" % len(self.all_lights))
+            logging.info("Talking to %s Elgato lights:" % len(self.all_lights))
             self.last_light_discover = time.time()
-        if lights_before != len(self.all_lights):
-            logging.info("Number of found Elgato lights: %s" % len(self.all_lights))
             for light in self.all_lights:
                 logging.info("  %s" % light)
 
