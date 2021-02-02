@@ -48,9 +48,14 @@ class KeyLight2MQTT:
     def mqtt_on_message(self, client, userdata, msg):
         logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
         what = msg.topic.split("/")[-1]
+        serial = msg.topic.split("/")[1]
         value = msg.payload.decode("utf-8")
-        logging.info("Setting %s on elgato lights to %s" % (what, value))
+        logging.info("Setting %s on elgato light %s to %s" % (what, serial, value))
         for light in self.all_lights:
+            if serial not in light:
+                # do nothing if we are the wrong light
+                return
+
             # fetch current light state
             state = light.info()
 
