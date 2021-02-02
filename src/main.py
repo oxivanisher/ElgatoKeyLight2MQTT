@@ -10,9 +10,13 @@ import time
 
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
-    log_level = logging.DEBUG
+  log_level = logging.DEBUG
 
-logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s', level=log_level)
+logging.basicConfig(
+  format='%(asctime)s %(levelname)-7s %(message)s',
+  datefmt='%Y-%d-%m %H:%M:%S',
+  level=log_level
+)
 
 
 class KeyLight2MQTT:
