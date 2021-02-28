@@ -85,13 +85,17 @@ class KeyLight2MQTT:
         lights_before = len(self.all_lights)
         if time.time() - self.last_light_discover > 60:
             logging.debug("Starting to discover lights...")
-            self.all_lights = leglight.discover(2)
-            self.last_light_discover = time.time()
+            try:
+                self.all_lights = leglight.discover(2)
+                self.last_light_discover = time.time()
 
-            if lights_before != len(self.all_lights):
-                logging.info("Found %s Elgato lights:" % len(self.all_lights))
-                for light in self.all_lights:
-                    logging.info("  %s" % light)
+                if lights_before != len(self.all_lights):
+                    logging.info("Found %s Elgato lights:" % len(self.all_lights))
+                    for light in self.all_lights:
+                        logging.info("  %s" % light)
+
+            except OSError as err:
+                logging.error("OS error: {0}".format(err))
 
     def run(self):
         if self.mqtt_user:
