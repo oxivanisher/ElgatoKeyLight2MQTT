@@ -95,6 +95,7 @@ class KeyLight2MQTT:
                         logging.info("  %s" % light)
 
             except OSError as err:
+                self.last_light_discover = time.time() - 30
                 logging.error("OS error: {0}".format(err))
 
     def run(self):
