@@ -111,7 +111,7 @@ class KeyLight2MQTT:
                 connected = True
                 logging.info("Connection successful")
             except ConnectionRefusedError:
-                time.sleep(3)
+                time.sleep(1)
 
         # self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
 
