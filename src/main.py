@@ -115,7 +115,9 @@ class KeyLight2MQTT:
 
         try:
             while True:
+                logging.debug("Loop over discover_lights")
                 self.discover_lights()
+                logging.debug("Loop over MQTT client")
                 self.mqtt_client.loop(timeout=2)
         finally:
             self.mqtt_client.loop_stop(force=True)
