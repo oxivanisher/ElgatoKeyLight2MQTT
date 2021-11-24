@@ -102,29 +102,28 @@ class KeyLight2MQTT:
         if self.mqtt_user:
             self.mqtt_client.username_pw_set(self.mqtt_user, self.mqtt_password)
 
-        logging.info("Waiting for MQTT server...")
+        while True:
+            logging.info("Waiting for MQTT server...")
 
-        connected = False
-        while not connected:
+            connected = False
+            while not connected:
+                try:
+                    self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
+                    connected = True
+                    logging.info("Connection successful")
+                except ConnectionRefusedError:
+                    time.sleep(1)
+
             try:
-                self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
-                connected = True
-                logging.info("Connection successful")
-            except ConnectionRefusedError:
-                time.sleep(1)
-
-        # self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
-
-        try:
-            while True:
-                self.discover_lights()
-                return_value = self.mqtt_client.loop()
-                if return_value:
-                    logging.error("MQTT client loop returned <%s>. Exiting*" % return_value)
-                    break
-        finally:
-            # self.mqtt_client.loop_stop(force=True)
-            self.mqtt_client.disconnect()
+                while True:
+                    self.discover_lights()
+                    return_value = self.mqtt_client.loop()
+                    if return_value:
+                        logging.error("MQTT client loop returned <%s>. Restarting..." % return_value)
+                        break
+            finally:
+                self.mqtt_client.disconnect()
+                connected = False
 
 
 if __name__ == "__main__":
