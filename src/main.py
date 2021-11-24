@@ -101,7 +101,15 @@ class KeyLight2MQTT:
     def run(self):
         if self.mqtt_user:
             self.mqtt_client.username_pw_set(self.mqtt_user, self.mqtt_password)
-        self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
+
+        connected = False
+        while not connected:
+            try:
+                self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
+                connected = True
+            except ConnectionRefusedError:
+                logging.warning("Unable to connect to MQTT server. Will retry in 3 seconds.")
+                time.sleep(3)
 
         # self.mqtt_client.subscribe(self.mqtt_base_topic, qos=2)
 
