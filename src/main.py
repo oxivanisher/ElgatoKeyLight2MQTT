@@ -116,9 +116,11 @@ class KeyLight2MQTT:
         try:
             while True:
                 self.discover_lights()
-                self.mqtt_client.loop()
+                self.mqtt_client.loop(timeout=2)
         finally:
             self.mqtt_client.loop_stop(force=True)
+
+        logging.info("Exiting")
 
 
 if __name__ == "__main__":
