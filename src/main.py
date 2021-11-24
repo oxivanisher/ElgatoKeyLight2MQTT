@@ -118,7 +118,8 @@ class KeyLight2MQTT:
                 logging.debug("Loop over discover_lights")
                 self.discover_lights()
                 logging.debug("Loop over MQTT client")
-                self.mqtt_client.loop(timeout=2)
+                return_value = self.mqtt_client.loop(timeout=2)
+                logging.debug("MQTT client loop return: %s" % return_value)
         finally:
             self.mqtt_client.loop_stop(force=True)
 
