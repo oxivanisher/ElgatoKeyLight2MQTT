@@ -117,8 +117,6 @@ class KeyLight2MQTT:
             while True:
                 self.discover_lights()
                 self.mqtt_client.loop()
-        except Exception as e:
-            logging.error("%s: %s" % (e.message, e.args))
         finally:
             self.mqtt_client.loop_stop(force=True)
 
