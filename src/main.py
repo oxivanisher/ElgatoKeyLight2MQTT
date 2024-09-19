@@ -86,6 +86,8 @@ class KeyLight2MQTT:
         if time.time() - self.last_light_discover > 60:
             logging.debug("Starting to discover lights...")
             try:
+                # Clear old lights to avoid session accumulation
+                self.all_lights.clear()
                 self.all_lights = leglight.discover(2)
                 self.last_light_discover = time.time()
 
