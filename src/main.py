@@ -101,9 +101,11 @@ class KeyLight2MQTT:
                     for light in self.all_lights:
                         logging.info("  %s" % light)
     
-            except OSError as err:
-                self.last_light_discover = time.time() - 30
-                logging.error("OS error: {0}".format(err))
+              except OSError as err:
+                  self.last_light_discover = time.time() - 30
+                  logging.error("OS error: {0}".format(err))
+                  logging.error("Critical error in light discovery, exiting...")
+                  sys.exit(1)  # Exit with a failure code to trigger a systemd restart
 
     def run(self):
         if self.mqtt_user:
@@ -119,6 +121,7 @@ class KeyLight2MQTT:
                     connected = True
                     logging.info("Connection successful")
                 except ConnectionRefusedError:
+                    logging.error("Failed to connect to MQTT server, retrying...")
                     time.sleep(1)
 
             try:
@@ -126,8 +129,11 @@ class KeyLight2MQTT:
                     self.discover_lights()
                     return_value = self.mqtt_client.loop()
                     if return_value:
-                        logging.error("MQTT client loop returned <%s>. Restarting..." % return_value)
-                        break
+                        logging.error("MQTT client loop returned <%s>. Exiting..." % return_value)
+                        sys.exit(1)  # Exit on critical MQTT loop errors
+            except Exception as e:
+                logging.error("Unhandled exception occurred: %s", e)
+                sys.exit(1)  # Exit on unexpected exceptions
             finally:
                 self.mqtt_client.disconnect()
                 connected = False
