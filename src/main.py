@@ -101,11 +101,11 @@ class KeyLight2MQTT:
                     for light in self.all_lights:
                         logging.info("  %s" % light)
     
-              except OSError as err:
-                  self.last_light_discover = time.time() - 30
-                  logging.error("OS error: {0}".format(err))
-                  logging.error("Critical error in light discovery, exiting...")
-                  sys.exit(1)  # Exit with a failure code to trigger a systemd restart
+            except OSError as err:
+                self.last_light_discover = time.time() - 30
+                logging.error("OS error: {0}".format(err))
+                logging.error("Critical error in light discovery, exiting...")
+                sys.exit(1)  # Exit with a failure code to trigger a systemd restart
 
     def run(self):
         if self.mqtt_user:
