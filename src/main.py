@@ -86,16 +86,21 @@ class KeyLight2MQTT:
         if time.time() - self.last_light_discover > 60:
             logging.debug("Starting to discover lights...")
             try:
-                # Clear old lights to avoid session accumulation
-                self.all_lights.clear()
-                self.all_lights = leglight.discover(2)
+                discovered_lights = leglight.discover(2)
                 self.last_light_discover = time.time()
-
+              
+                # Merge new lights with existing lights, removing duplicates based on serial number
+                all_serials = {light.serialNumber.lower() for light in self.all_lights}
+                for new_light in discovered_lights:
+                    if new_light.serialNumber.lower() not in all_serials:
+                        self.all_lights.append(new_light)
+                        all_serials.add(new_light.serialNumber.lower())
+    
                 if lights_before != len(self.all_lights):
                     logging.info("Found %s Elgato lights:" % len(self.all_lights))
                     for light in self.all_lights:
                         logging.info("  %s" % light)
-
+    
             except OSError as err:
                 self.last_light_discover = time.time() - 30
                 logging.error("OS error: {0}".format(err))
