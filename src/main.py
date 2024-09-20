@@ -82,30 +82,37 @@ class KeyLight2MQTT:
                     logging.debug("Temperature to %s" % value)
 
     def discover_lights(self):
+        # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
-        if time.time() - self.last_light_discover > 60:
+        cache_duration = 600  # Cache results for 10 minutes
+
+        # Only discover if cache is empty or older than cache_duration
+        if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
             logging.debug("Starting to discover lights...")
             try:
-                discovered_lights = leglight.discover(2)
+                discovered_lights = leglight.discover(2)  # Time to wait for discovery
                 self.last_light_discover = time.time()
-              
+
                 # Merge new lights with existing lights, removing duplicates based on serial number
                 all_serials = {light.serialNumber.lower() for light in self.all_lights}
                 for new_light in discovered_lights:
                     if new_light.serialNumber.lower() not in all_serials:
                         self.all_lights.append(new_light)
                         all_serials.add(new_light.serialNumber.lower())
-    
+
                 if lights_before != len(self.all_lights):
                     logging.info("Found %s Elgato lights:" % len(self.all_lights))
                     for light in self.all_lights:
                         logging.info("  %s" % light)
-    
+
             except OSError as err:
-                self.last_light_discover = time.time() - 30
+                self.last_light_discover = time.time() - 30  # Retry sooner if error occurs
                 logging.error("OS error: {0}".format(err))
                 logging.error("Critical error in light discovery, exiting...")
-                sys.exit(1)  # Exit with a failure code to trigger a systemd restart
+                sys.exit(1)  # Exit to trigger restart in systemd
+        else:
+            logging.debug("Using cached lights, skipping discovery.")
+
 
     def run(self):
         if self.mqtt_user:
