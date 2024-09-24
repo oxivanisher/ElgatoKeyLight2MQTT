@@ -1,2 +1,4 @@
 paho-mqtt
-leglight
+#leglight is replaced by source...
+requests
+zeroconf
