@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 
-
 import paho.mqtt.client as mqtt
 import os
 import logging
 import leglight
 import time
-
+import sys
 
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
-  log_level = logging.DEBUG
+    log_level = logging.DEBUG
 
 logging.basicConfig(
-  format='%(asctime)s %(levelname)-7s %(message)s',
-  datefmt='%Y-%d-%m %H:%M:%S',
-  level=log_level
+    format='%(asctime)s %(levelname)-7s %(message)s',
+    datefmt='%Y-%d-%m %H:%M:%S',
+    level=log_level
 )
 
 
@@ -23,7 +22,7 @@ class KeyLight2MQTT:
 
     def __init__(self):
         self.mqtt_server = os.getenv('MQTT_SERVER', 'localhost')
-        self.mqtt_port = os.getenv('MQTT_PORT', 1883)
+        self.mqtt_port = int(os.getenv('MQTT_PORT', 1883))
         self.mqtt_user = os.getenv('MQTT_USER', None)
         self.mqtt_password = os.getenv('MQTT_PASSWORD', None)
         self.mqtt_base_topic = os.getenv('MQTT_BASE_TOPIC', 'ElgatoKeyLights')
@@ -31,6 +30,7 @@ class KeyLight2MQTT:
         self.mqtt_client = mqtt.Client()
         self.mqtt_client.on_connect = self.mqtt_on_connect
         self.mqtt_client.on_message = self.mqtt_on_message
+        self.mqtt_client.on_disconnect = self.mqtt_on_disconnect
 
         self.all_lights = []
         self.last_light_discover = 0
@@ -45,27 +45,26 @@ class KeyLight2MQTT:
                 light.off()
                 logging.debug("Light off")
 
-    def mqtt_on_connect(self, client, userdata, flags, rc):
-        logging.info("MQTT: Connected with result code "+str(rc))
+    def mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
+        logging.info(f"MQTT: Connected with result code {rc}")
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        topic = "%s/set/#" % self.mqtt_base_topic
-        logging.info("MQTT: Subscribing to %s" % topic)
+        topic = f"{self.mqtt_base_topic}/set/#"
+        logging.info(f"MQTT: Subscribing to {topic}")
         client.subscribe(topic)
 
     def mqtt_on_message(self, client, userdata, msg):
-        logging.debug("MQTT: Msg recieved on <%s>: <%s>" % (msg.topic, str(msg.payload)))
+        logging.debug(f"MQTT: Msg received on <{msg.topic}>: <{msg.payload}>")
         what = msg.topic.split("/")[-1]
         serial = msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
-        logging.info("Setting %s on elgato light %s to %s" % (what, serial, value))
+        logging.info(f"Setting {what} on elgato light {serial} to {value}")
         for light in self.all_lights:
             if serial.lower() != light.serialNumber.lower():
-                # do nothing if we are the wrong light
-                continue
+                continue  # Skip if wrong light
 
-            # fetch current light state
+            # Fetch current light state
             state = light.info()
 
             if what == "power":
@@ -74,12 +73,15 @@ class KeyLight2MQTT:
                 value = int(value)
                 if state['brightness'] != value:
                     light.brightness(value)
-                    logging.debug("Brightness to %s" % value)
+                    logging.debug(f"Brightness to {value}")
             elif what == "color":
                 value = int(value)
                 if state['temperature'] != value:
                     light.color(value)
-                    logging.debug("Temperature to %s" % value)
+                    logging.debug(f"Temperature to {value}")
+
+    def mqtt_on_disconnect(self, client, userdata, rc):
+        logging.warning(f"MQTT: Disconnected with result code {rc}")
 
     def discover_lights(self):
         # Cache results, discover only when needed (e.g., every 10 minutes)
@@ -101,18 +103,17 @@ class KeyLight2MQTT:
                         all_serials.add(new_light.serialNumber.lower())
 
                 if lights_before != len(self.all_lights):
-                    logging.info("Found %s Elgato lights:" % len(self.all_lights))
+                    logging.info(f"Found {len(self.all_lights)} Elgato lights:")
                     for light in self.all_lights:
-                        logging.info("  %s" % light)
+                        logging.info(f"  {light}")
 
             except OSError as err:
                 self.last_light_discover = time.time() - 30  # Retry sooner if error occurs
-                logging.error("OS error: {0}".format(err))
+                logging.error(f"OS error: {err}")
                 logging.error("Critical error in light discovery, exiting...")
                 sys.exit(1)  # Exit to trigger restart in systemd
         else:
             logging.debug("Using cached lights, skipping discovery.")
-
 
     def run(self):
         if self.mqtt_user:
@@ -124,7 +125,7 @@ class KeyLight2MQTT:
             connected = False
             while not connected:
                 try:
-                    self.mqtt_client.connect(self.mqtt_server, int(self.mqtt_port), 60)
+                    self.mqtt_client.connect(self.mqtt_server, self.mqtt_port, 60)
                     connected = True
                     logging.info("Connection successful")
                 except ConnectionRefusedError:
@@ -134,12 +135,12 @@ class KeyLight2MQTT:
             try:
                 while True:
                     self.discover_lights()
-                    return_value = self.mqtt_client.loop()
+                    return_value = self.mqtt_client.loop_forever()
                     if return_value:
-                        logging.error("MQTT client loop returned <%s>. Exiting..." % return_value)
+                        logging.error(f"MQTT client loop returned <{return_value}>. Exiting...")
                         sys.exit(1)  # Exit on critical MQTT loop errors
             except Exception as e:
-                logging.error("Unhandled exception occurred: %s", e)
+                logging.error(f"Unhandled exception occurred: {e}")
                 sys.exit(1)  # Exit on unexpected exceptions
             finally:
                 self.mqtt_client.disconnect()
