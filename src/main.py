@@ -134,6 +134,9 @@ class KeyLight2MQTT:
                 except OSError as e:
                     logging.error(f"MQTT connection OSError: {e.message}, retrying in 3 seconds...")
                     time.sleep(3)
+                except Exception as e:
+                    logging.error(f"Unknown exception caught:\n{traceback.format_exc()}\n retrying in 3 seconds...")
+                    time.sleep(3)
 
             try:
                 while True:
