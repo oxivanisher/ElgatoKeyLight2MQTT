@@ -129,8 +129,11 @@ class KeyLight2MQTT:
                     connected = True
                     logging.info("Connection successful")
                 except ConnectionRefusedError:
-                    logging.error("Failed to connect to MQTT server, retrying...")
-                    time.sleep(1)
+                    logging.error("Failed to connect to MQTT server, retrying in 3 seconds...")
+                    time.sleep(3)
+                except OSError as e:
+                    logging.error(f"MQTT connection OSError: {e.message}, retrying in 3 seconds...")
+                    time.sleep(3)
 
             try:
                 while True:
