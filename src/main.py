@@ -59,7 +59,7 @@ class KeyLight2MQTT:
         what = msg.topic.split("/")[-1]
         serial = msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
-        logging.info(f"Setting {what} on elgato light {serial} to {value}")
+        logging.info(f"Change setting on {serial}: {what} to {value}")
         for light in self.all_lights:
             if serial.lower() != light.serialNumber.lower():
                 continue  # Skip if wrong light
@@ -105,7 +105,7 @@ class KeyLight2MQTT:
                     # Check if existing lights have new infos
                     for existing_light in self.all_lights:
                         if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
-                            run_serial = new_light.serialNumber.lower()
+                            run_serial = new_light.serialNumber
                             logging.debug(f"Checking existing light infos for serial {run_serial}")
                             replace_light = False
                             if existing_light.address != new_light.address:
