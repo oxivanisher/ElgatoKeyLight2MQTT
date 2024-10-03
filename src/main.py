@@ -59,7 +59,7 @@ class KeyLight2MQTT:
         what = msg.topic.split("/")[-1]
         serial = msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
-        logging.info(f"Change setting on {serial}: {what} to {value}")
+        logging.info(f"MQTT ordered to change setting on {serial}: {what} to {value}")
         for light in self.all_lights:
             if serial.lower() != light.serialNumber.lower():
                 continue  # Skip if wrong light
