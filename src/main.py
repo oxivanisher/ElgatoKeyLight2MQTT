@@ -86,7 +86,7 @@ class KeyLight2MQTT:
     def discover_lights(self):
         # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
-        cache_duration = 600  # Cache results for 10 minutes
+        cache_duration = 300  # Cache results for 5 minutes
 
         # Only discover if cache is empty or older than cache_duration
         if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
@@ -101,6 +101,24 @@ class KeyLight2MQTT:
                     if new_light.serialNumber.lower() not in all_serials:
                         self.all_lights.append(new_light)
                         all_serials.add(new_light.serialNumber.lower())
+
+                    # Check if existing lights have new infos
+                    for existing_light in self.all_lights:
+                        if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
+                            run_serial = new_light.serialNumber.lower()
+                            logging.debug(f"Checking existing light infos for serial {run_serial}")
+                            replace_light = False
+                            if existing_light.address != new_light.address:
+                                logging.debug(f"Address for {run_serial} changed from {existing_light.address} to {new_light.address}")
+                                replace_light = True
+                            if existing_light.port != new_light.port:
+                                logging.debug(f"Port for {run_serial} changed from {existing_light.port} to {new_light.port}")
+                                replace_light = True
+
+                            if replace_light:
+                                logging.info(f"Infos for {run_serial} changed, updating light")
+                                self.all_lights.pop(existing_light)
+                                self.all_lights.append(new_light)
 
                 if lights_before != len(self.all_lights):
                     logging.info(f"Found {len(self.all_lights)} Elgato lights:")
