@@ -114,23 +114,41 @@ class LegLight:
 
     def info(self) -> dict:
         """ Gets the current light status. """
-        logging.debug(f"Getting info for {self.display}")
+        logging.debug(f"getting info for {self.display}")
         try:
-            res = self.session.get(f"http://{self.address}:{self.port}/elgato/lights", timeout=self.timeout)
-            res.raise_for_status()
-            status = res.json()["lights"][0]
-            self.isOn = status["on"]
-            self.isBrightness = status["brightness"]
-            self.isTemperature = self.postFit(status["temperature"])
-            return {
-                "on": self.isOn,
-                "brightness": self.isBrightness,
-                "temperature": self.isTemperature,
-            }
+            with requests.get(f"http://{self.address}:{self.port}/elgato/lights", timeout=5) as res:
+                status = res.json().get("lights", [{}])[0]
+                self.isOn = status.get("on", 0)
+                self.isBrightness = status.get("brightness", 0)
+                self.isTemperature = self.postFit(status.get("temperature", 2900))
+                return {
+                    "on": self.isOn,
+                    "brightness": self.isBrightness,
+                    "temperature": self.isTemperature,
+                }
         except requests.exceptions.RequestException as e:
             logging.error(f"Error retrieving light info from {self.address}: {e}")
-            return {}
+            return {
+                "on": -1,
+                "brightness": -1,
+                "temperature": -1,
+            }
 
+    def ping(self) -> bool:
+        """ Check if the light is reachable by sending a simple GET request. """
+        try:
+            # Send a HEAD request to check if the device is reachable without pulling all the data
+            response = requests.head(f"http://{self.address}:{self.port}/elgato/accessory-info", timeout=5)
+            # Check for a successful response code (200 OK)
+            if response.status_code == 200:
+                return True
+            else:
+                logging.warning(f"Received unexpected status code {response.status_code} from {self.address}")
+                return False
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Failed to ping light at {self.address}: {e}")
+            return False
+    
     def colorFit(self, val: int) -> int:
         """Take a color temp (in K) and convert it to the format the Elgato Light wants"""
         return int(round(987007 * val ** -0.999, 0))
