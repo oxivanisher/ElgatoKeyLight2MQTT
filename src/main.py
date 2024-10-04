@@ -7,7 +7,7 @@ import leglight
 import time
 import sys
 import traceback
-import urllib3.exceptions
+from urllib3 import exceptions
 
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
@@ -37,6 +37,8 @@ class KeyLight2MQTT:
         self.all_lights = []
         self.last_light_discover = 0
 
+        self.last_light_cleanup = 0
+
     def set_light_power(self, light, state, power="on"):
         if power == "on":
             if not state['on']:
@@ -62,7 +64,12 @@ class KeyLight2MQTT:
         serial = msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
         logging.info(f"MQTT ordered to change setting on {serial}: {what} to {value}")
+        lights_to_remove = []
         for light in self.all_lights:
+            # if this light alredy is in the ingore list, skip it
+            if light in lights_to_remove:
+                continue
+            
             if serial.lower() != light.serialNumber.lower():
                 continue  # Skip if wrong light
 
@@ -70,15 +77,9 @@ class KeyLight2MQTT:
             try:
                 # Fetch current light state
                 state = light.info()
-            except urllib3.exceptions.MaxRetryError:
-                self.last_light_discover = time.time() - 30
-                logging.warning(f"Unable to connecto to light, skipping.")
-                continue
-
             except Exception as e:
-                # Force redetection on next loop, since we probably lost a light
-                self.last_light_discover = time.time() - 30
-                logging.error(f"Unknown exception caught:\n{traceback.format_exc()}")
+                # Some error connecting to the light. Lets remove it and continue
+                lights_to_remove.append(light)
                 continue  # Skip on error
 
             if what == "power":
@@ -94,6 +95,11 @@ class KeyLight2MQTT:
                     light.color(value)
                     logging.debug(f"Temperature to {value}")
 
+            for light in list(set(lights_to_remove)):
+                logging.info(f"Removing light {light.serial}")
+                # Remove lights from list
+                self.all_lights.pop(light)
+
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
         sys.exit(1)
@@ -102,6 +108,24 @@ class KeyLight2MQTT:
         # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
         cache_duration = 60  # Cache results for 1 Minute
+        light_cleanup_timeout = 130  # Try to connect to lights and remove the ones not available
+
+        if len(self.all_lights) and time.time() - self.self.last_light_cleanup > light_cleanup_timeout:
+            lights_to_remove = []
+            for light in self.all_lights:
+                # if this light alredy is in the ingore list, skip it
+                try:
+                    # Fetch current light state
+                    state = light.info()
+                except Exception as e:
+                    # Some error connecting to the light. Lets remove it and continue
+                    lights_to_remove.append(light)
+                    continue  # Skip on error
+
+            for light in lights_to_remove:
+                logging.info(f"Removing light {light.serial}")
+                # Remove lights from list
+                self.all_lights.pop(light)
 
         # Only discover if cache is empty or older than cache_duration
         if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
