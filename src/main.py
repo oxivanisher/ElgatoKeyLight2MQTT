@@ -98,7 +98,7 @@ class KeyLight2MQTT:
             for light in list(set(lights_to_remove)):
                 logging.info(f"Removing light {light.serialNumber}")
                 # Remove lights from list
-                self.all_lights.pop(light)
+                self.all_lights.remove(light)
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
@@ -122,7 +122,7 @@ class KeyLight2MQTT:
             for light in lights_to_remove:
                 logging.info(f"Removing light {light.serialNumber}")
                 # Remove lights from list
-                self.all_lights.pop(light)
+                self.all_lights.remove(light)
 
             self.last_light_cleanup = time.time()
         
@@ -155,7 +155,7 @@ class KeyLight2MQTT:
 
                             if replace_light:
                                 logging.info(f"Infos for {run_serial} changed, updating light")
-                                self.all_lights.pop(existing_light)
+                                self.all_lights.remove(existing_light)
                                 self.all_lights.append(new_light)
 
                 if lights_before != len(self.all_lights):
