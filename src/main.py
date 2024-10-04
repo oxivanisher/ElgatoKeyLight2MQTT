@@ -5,6 +5,7 @@ import time
 import sys
 import traceback
 from leglight import LegLight, discover
+import gc
 
 log_level = logging.DEBUG if os.getenv('DEBUG', False) else logging.INFO
 
@@ -67,6 +68,8 @@ class KeyLight2MQTT:
         except Exception as e:
             logging.error(f"Error processing light {light.serialNumber}: {e}")
             logging.debug(traceback.format_exc())
+        finally:
+            light.close()  # Ensure the connection is closed after each operation
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Reconnecting...")
@@ -99,15 +102,24 @@ class KeyLight2MQTT:
                     logging.info(f"New light discovered: {light}")
                 else:
                     existing_light = self.all_lights[light.serialNumber.lower()]
-                    if existing_light.address != light.address or existing_light.port != light.port:
-                        logging.info(f"Updating info for light {light.serialNumber}")
-                        self.all_lights[light.serialNumber.lower()] = light
+                    existing_light.close()  # Close the existing connection
+                    self.all_lights[light.serialNumber.lower()] = light
+                    logging.info(f"Updated light info: {light}")
             
             self.last_light_discover = time.time()
             self._log_discovered_lights()
         except Exception as err:
             logging.error(f"Error in light discovery: {err}")
             logging.debug(traceback.format_exc())
+        finally:
+            # Close connections for lights that are no longer present
+            current_serials = set(light.serialNumber.lower() for light in discovered_lights)
+            for serial, light in list(self.all_lights.items()):
+                if serial not in current_serials:
+                    light.close()
+                    del self.all_lights[serial]
+                    logging.info(f"Removed light: {light}")
+            gc.collect()  # Force garbage collection
 
     def _log_discovered_lights(self):
         logging.info(f"Current known lights ({len(self.all_lights)}):")
