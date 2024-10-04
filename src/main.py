@@ -1,11 +1,10 @@
 import paho.mqtt.client as mqtt
 import os
 import logging
-import leglight
 import time
 import sys
 import traceback
-import socket
+from leglight import LegLight, discover
 
 log_level = logging.DEBUG if os.getenv('DEBUG', False) else logging.INFO
 
@@ -33,28 +32,6 @@ class KeyLight2MQTT:
         self.last_light_discover = 0
         self.discovery_interval = 60  # Discover lights every 1 minute
 
-    def is_light_responsive(self, light):
-        try:
-            # First, try a socket connection
-            with socket.create_connection((light.address, light.port), timeout=2):
-                pass
-            # If socket connection succeeds, try the API endpoint
-            return light.ping()
-        except Exception as e:
-            logging.debug(f"Light {light.serialNumber} is unresponsive: {e}")
-            return False
-
-    def set_light_power(self, light, power="on"):
-        try:
-            if power == "on":
-                light.on()
-                logging.info(f"Light {light.serialNumber} turned on")
-            else:
-                light.off()
-                logging.info(f"Light {light.serialNumber} turned off")
-        except Exception as e:
-            logging.error(f"Error setting light {light.serialNumber} power: {e}")
-
     def mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
         logging.info(f"MQTT: Connected with result code {rc}")
         topic = f"{self.mqtt_base_topic}/set/#"
@@ -74,13 +51,6 @@ class KeyLight2MQTT:
             light = self.all_lights.get(serial.lower())
             if not light:
                 logging.error(f"Light {serial} still not found after discovery.")
-                return
-
-        if not self.is_light_responsive(light):
-            logging.warning(f"Light {serial} not responding. Attempting to reconnect...")
-            self.reconnect_light(light)
-            if not self.is_light_responsive(light):
-                logging.error(f"Failed to reconnect to light {serial}. Skipping action.")
                 return
 
         try:
@@ -108,10 +78,21 @@ class KeyLight2MQTT:
                 logging.error(f"Reconnection failed: {e}. Retrying in 5 seconds...")
                 time.sleep(5)
 
+    def set_light_power(self, light, power="on"):
+        try:
+            if power.lower() == "on":
+                light.on()
+                logging.info(f"Light {light.serialNumber} turned on")
+            else:
+                light.off()
+                logging.info(f"Light {light.serialNumber} turned off")
+        except Exception as e:
+            logging.error(f"Error setting light {light.serialNumber} power: {e}")
+
     def discover_lights(self):
         logging.info("Starting to discover lights...")
         try:
-            discovered_lights = leglight.discover(2)
+            discovered_lights = discover(2)
             for light in discovered_lights:
                 if light.serialNumber.lower() not in self.all_lights:
                     self.all_lights[light.serialNumber.lower()] = light
@@ -128,19 +109,10 @@ class KeyLight2MQTT:
             logging.error(f"Error in light discovery: {err}")
             logging.debug(traceback.format_exc())
 
-    def reconnect_light(self, light):
-        try:
-            new_light = leglight.LegLight(light.address, light.port)
-            self.all_lights[light.serialNumber.lower()] = new_light
-            logging.info(f"Successfully reconnected to light {light.serialNumber}")
-        except Exception as e:
-            logging.error(f"Failed to reconnect to light {light.serialNumber}: {e}")
-            logging.debug(traceback.format_exc())
-
     def _log_discovered_lights(self):
         logging.info(f"Current known lights ({len(self.all_lights)}):")
         for serial, light in self.all_lights.items():
-            status = "responsive" if self.is_light_responsive(light) else "unresponsive"
+            status = "responsive" if light.ping() else "unresponsive"
             logging.info(f"  {light} - {status}")
 
     def run(self):
