@@ -91,72 +91,72 @@ class KeyLight2MQTT:
         logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
         sys.exit(1)
 
-    # def discover_lights(self):
-    #     # Cache results, discover only when needed (e.g., every 10 minutes)
-    #     lights_before = len(self.all_lights)
-    #     cache_duration = 300  # Cache results for 5 minutes
-
-    #     # Only discover if cache is empty or older than cache_duration
-    #     if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
-    #         logging.debug("Starting to discover lights...")
-    #         try:
-    #             discovered_lights = leglight.discover(2)  # Time to wait for discovery
-    #             self.last_light_discover = time.time()
-
-    #             # Merge new lights with existing lights, removing duplicates based on serial number
-    #             all_serials = {light.serialNumber.lower() for light in self.all_lights}
-    #             for new_light in discovered_lights:
-    #                 if new_light.serialNumber.lower() not in all_serials:
-    #                     self.all_lights.append(new_light)
-    #                     all_serials.add(new_light.serialNumber.lower())
-
-    #                 # Check if existing lights have new infos
-    #                 for existing_light in self.all_lights:
-    #                     if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
-    #                         run_serial = new_light.serialNumber
-    #                         logging.debug(f"Checking existing light infos for serial {run_serial}")
-    #                         replace_light = False
-    #                         if existing_light.address != new_light.address:
-    #                             logging.debug(f"Address for {run_serial} changed from {existing_light.address} to {new_light.address}")
-    #                             replace_light = True
-    #                         if existing_light.port != new_light.port:
-    #                             logging.debug(f"Port for {run_serial} changed from {existing_light.port} to {new_light.port}")
-    #                             replace_light = True
-
-    #                         if replace_light:
-    #                             logging.info(f"Infos for {run_serial} changed, updating light")
-    #                             self.all_lights.pop(existing_light)
-    #                             self.all_lights.append(new_light)
-
-    #             if lights_before != len(self.all_lights):
-    #                 logging.info(f"Found {len(self.all_lights)} Elgato lights:")
-    #                 for light in self.all_lights:
-    #                     logging.info(f"  {light}")
-
-    #         except OSError as err:
-    #             self.last_light_discover = time.time() - 30  # Retry sooner if error occurs
-    #             logging.error(f"OS error: {err}")
-    #             logging.error("Critical error in light discovery, exiting...")
-    #             sys.exit(1)  # Exit to trigger restart in systemd
-    #     else:
-    #         logging.debug("Using cached lights, skipping discovery.")
-
     def discover_lights(self):
+        # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
-        if time.time() - self.last_light_discover > 60:
+        cache_duration = 300  # Cache results for 5 minutes
+
+        # Only discover if cache is empty or older than cache_duration
+        if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
             logging.debug("Starting to discover lights...")
             try:
-                self.all_lights = leglight.discover(2)
+                discovered_lights = leglight.discover(2)  # Time to wait for discovery
                 self.last_light_discover = time.time()
 
+                # Merge new lights with existing lights, removing duplicates based on serial number
+                all_serials = {light.serialNumber.lower() for light in self.all_lights}
+                for new_light in discovered_lights:
+                    if new_light.serialNumber.lower() not in all_serials:
+                        self.all_lights.append(new_light)
+                        all_serials.add(new_light.serialNumber.lower())
+
+                    # Check if existing lights have new infos
+                    for existing_light in self.all_lights:
+                        if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
+                            run_serial = new_light.serialNumber
+                            logging.debug(f"Checking existing light infos for serial {run_serial}")
+                            replace_light = False
+                            if existing_light.address != new_light.address:
+                                logging.debug(f"Address for {run_serial} changed from {existing_light.address} to {new_light.address}")
+                                replace_light = True
+                            if existing_light.port != new_light.port:
+                                logging.debug(f"Port for {run_serial} changed from {existing_light.port} to {new_light.port}")
+                                replace_light = True
+
+                            if replace_light:
+                                logging.info(f"Infos for {run_serial} changed, updating light")
+                                self.all_lights.pop(existing_light)
+                                self.all_lights.append(new_light)
+
                 if lights_before != len(self.all_lights):
-                    logging.info("Found %s Elgato lights:" % len(self.all_lights))
+                    logging.info(f"Found {len(self.all_lights)} Elgato lights:")
                     for light in self.all_lights:
-                        logging.info("  %s" % light)
+                        logging.info(f"  {light}")
 
             except OSError as err:
-                self.last_light_discover = time.time() - 30
-                logging.error("OS error: {0}".format(err))
+                self.last_light_discover = time.time() - 30  # Retry sooner if error occurs
+                logging.error(f"OS error: {err}")
+                logging.error("Critical error in light discovery, exiting...")
+                sys.exit(1)  # Exit to trigger restart in systemd
+        else:
+            logging.debug("Using cached lights, skipping discovery.")
+
+    # def discover_lights(self):
+    #     lights_before = len(self.all_lights)
+    #     if time.time() - self.last_light_discover > 60:
+    #         logging.debug("Starting to discover lights...")
+    #         try:
+    #             self.all_lights = leglight.discover(2)
+    #             self.last_light_discover = time.time()
+
+    #             if lights_before != len(self.all_lights):
+    #                 logging.info("Found %s Elgato lights:" % len(self.all_lights))
+    #                 for light in self.all_lights:
+    #                     logging.info("  %s" % light)
+
+    #         except OSError as err:
+    #             self.last_light_discover = time.time() - 30
+    #             logging.error("OS error: {0}".format(err))
     
     def run(self):
         if self.mqtt_user:
@@ -184,7 +184,7 @@ class KeyLight2MQTT:
             try:
                 while True:
                     self.discover_lights()
-                    return_value = self.mqtt_client.loop_forever()
+                    return_value = self.mqtt_client.loop()
                     if return_value:
                         logging.error(f"MQTT client loop returned <{return_value}>. Exiting...")
                         sys.exit(1)  # Exit on critical MQTT loop errors
