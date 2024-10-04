@@ -92,7 +92,7 @@ class KeyLight2MQTT:
     def discover_lights(self):
         logging.info("Starting to discover lights...")
         try:
-            discovered_lights = discover(2)
+            discovered_lights = discover(timeout=5, retry_count=3)
             for light in discovered_lights:
                 if light.serialNumber.lower() not in self.all_lights:
                     self.all_lights[light.serialNumber.lower()] = light
