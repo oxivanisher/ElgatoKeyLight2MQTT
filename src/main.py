@@ -94,7 +94,7 @@ class KeyLight2MQTT:
     def discover_lights(self):
         # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
-        cache_duration = 300  # Cache results for 5 minutes
+        cache_duration = 60  # Cache results for 1 Minute
 
         # Only discover if cache is empty or older than cache_duration
         if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
