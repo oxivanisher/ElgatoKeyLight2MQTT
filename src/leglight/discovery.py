@@ -7,16 +7,6 @@ import logging
 import threading
 
 def discover(timeout: int = 5, retry_count: int = 3) -> list:
-    """ 
-    Return a list of Elgato lights on the network
-    
-    Parameters
-    ----------
-    timeout : int
-       The number of seconds to wait for zeroconf discovery
-    retry_count : int
-       The number of times to retry discovery if no lights are found
-    """
     lights = []
     discovery_complete = threading.Event()
 
@@ -26,25 +16,29 @@ def discover(timeout: int = 5, retry_count: int = 3) -> list:
         def update_service(self):
             pass
         def add_service(self, zeroconf, type, name):
-            info = zeroconf.get_service_info(type, name)
-            if info:
-                ip = socket.inet_ntoa(info.addresses[0])
-                port = cast(int, info.port)
-                lname = info.name
-                server = info.server
-                logging.debug(f"Found light @ {ip}:{port}")
-                light = LegLight(address=ip, port=port, name=lname, server=server)
-                if light not in lights:
-                    lights.append(light)
-                    logging.info(f"Added new light: {light}")
-                discovery_complete.set()
+            try:
+                info = zeroconf.get_service_info(type, name)
+                if info:
+                    ip = socket.inet_ntoa(info.addresses[0])
+                    port = cast(int, info.port)
+                    lname = info.name
+                    server = info.server
+                    logging.debug(f"Found light @ {ip}:{port}")
+                    light = LegLight(address=ip, port=port, name=lname, server=server)
+                    if light not in lights:
+                        lights.append(light)
+                        logging.info(f"Added new light: {light}")
+                    discovery_complete.set()
+            except Exception as e:
+                logging.error(f"Error adding service: {e}")
 
     for attempt in range(retry_count):
-        zeroconf = Zeroconf()
-        listener = TheListener()
-        browser = ServiceBrowser(zeroconf, "_elg._tcp.local.", listener)
-        
+        zc = None
         try:
+            zc = Zeroconf()
+            listener = TheListener()
+            browser = ServiceBrowser(zc, "_elg._tcp.local.", listener)
+            
             start = time()
             while time() - start < timeout:
                 if discovery_complete.wait(0.1):
@@ -55,8 +49,11 @@ def discover(timeout: int = 5, retry_count: int = 3) -> list:
                 break
             else:
                 logging.warning(f"No lights found in attempt {attempt + 1}. Retrying...")
+        except Exception as e:
+            logging.error(f"Error during discovery: {e}")
         finally:
-            zeroconf.close()
+            if zc:
+                zc.close()
         
         sleep(1)  # Wait a bit before retrying
 
