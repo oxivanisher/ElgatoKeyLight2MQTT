@@ -220,7 +220,7 @@ class KeyLight2MQTT:
                         logging.error(f"MQTT client loop returned <{return_value}>. Exiting...")
                         sys.exit(1)  # Exit on critical MQTT loop errors
             except Exception as e:
-                logging.error(f"Unhandled exception occurred: {e}")
+                logging.error(f"Unhandled exception occurred: {e}\n{traceback.format_exc()}")
                 sys.exit(1)  # Exit on unexpected exceptions
             finally:
                 self.mqtt_client.disconnect()
