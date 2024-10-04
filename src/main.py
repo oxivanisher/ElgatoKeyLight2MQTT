@@ -9,6 +9,10 @@ import sys
 import traceback
 from urllib3 import exceptions
 
+# optimize gone led detection
+import requests
+requests.adapters.DEFAULT_RETRIES = 1
+
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
     log_level = logging.DEBUG
@@ -123,7 +127,7 @@ class KeyLight2MQTT:
                     continue  # Skip on error
 
             for light in lights_to_remove:
-                logging.info(f"Removing light {light.serial}")
+                logging.info(f"Removing light {light.serialNumber}")
                 # Remove lights from list
                 self.all_lights.pop(light)
 
