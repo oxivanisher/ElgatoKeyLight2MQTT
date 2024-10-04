@@ -96,7 +96,7 @@ class KeyLight2MQTT:
                     logging.debug(f"Temperature to {value}")
 
             for light in list(set(lights_to_remove)):
-                logging.info(f"Removing light {light.serial}")
+                logging.info(f"Removing light {light.serialNumber}")
                 # Remove lights from list
                 self.all_lights.pop(light)
 
