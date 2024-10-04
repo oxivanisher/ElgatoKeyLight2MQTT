@@ -74,11 +74,11 @@ class KeyLight2MQTT:
                 continue  # Skip if wrong light
 
             # This is pretty dirty, but leglight does not hanle requests error it seems
-            try:
+            if light.ping():
                 # Fetch current light state
                 state = light.info()
-            except Exception as e:
-                # Some error connecting to the light. Lets remove it and continue
+            else:
+                # The light is no longer available
                 lights_to_remove.append(light)
                 continue  # Skip on error
 
@@ -115,13 +115,9 @@ class KeyLight2MQTT:
             lights_to_remove = []
             for light in self.all_lights:
                 # if this light alredy is in the ingore list, skip it
-                try:
-                    # Fetch current light state
-                    state = light.info()
-                except Exception as e:
+                if not light.ping():
                     # Some error connecting to the light. Lets remove it and continue
                     lights_to_remove.append(light)
-                    continue  # Skip on error
 
             for light in lights_to_remove:
                 logging.info(f"Removing light {light.serialNumber}")
