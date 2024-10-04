@@ -6,6 +6,7 @@ import sys
 import traceback
 from leglight import LegLight, discover
 import gc
+from threading import Lock
 
 log_level = logging.DEBUG if os.getenv('DEBUG', False) else logging.INFO
 
@@ -32,6 +33,8 @@ class KeyLight2MQTT:
         self.all_lights = {}
         self.last_light_discover = 0
         self.discovery_interval = 60  # Discover lights every 1 minute
+        self.discovery_lock = Lock()
+        self.last_discovery_attempt = {}
 
     def mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
         logging.info(f"MQTT: Connected with result code {rc}")
@@ -47,9 +50,12 @@ class KeyLight2MQTT:
         
         light = self.all_lights.get(serial.lower())
         if not light:
-            logging.warning(f"Light {serial} not found in known lights. Triggering discovery.")
-            self.discover_lights()
-            light = self.all_lights.get(serial.lower())
+            current_time = time.time()
+            if current_time - self.last_discovery_attempt.get(serial.lower(), 0) > 10:
+                logging.warning(f"Light {serial} not found in known lights. Triggering discovery.")
+                self.discover_lights()
+                light = self.all_lights.get(serial.lower())
+                self.last_discovery_attempt[serial.lower()] = current_time
             if not light:
                 logging.error(f"Light {serial} still not found after discovery.")
                 return
@@ -68,8 +74,6 @@ class KeyLight2MQTT:
         except Exception as e:
             logging.error(f"Error processing light {light.serialNumber}: {e}")
             logging.debug(traceback.format_exc())
-        finally:
-            light.close()  # Ensure the connection is closed after each operation
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Reconnecting...")
@@ -93,33 +97,36 @@ class KeyLight2MQTT:
             logging.error(f"Error setting light {light.serialNumber} power: {e}")
 
     def discover_lights(self):
-        logging.info("Starting to discover lights...")
-        try:
-            discovered_lights = discover(timeout=5, retry_count=3)
-            for light in discovered_lights:
-                if light.serialNumber.lower() not in self.all_lights:
-                    self.all_lights[light.serialNumber.lower()] = light
-                    logging.info(f"New light discovered: {light}")
-                else:
-                    existing_light = self.all_lights[light.serialNumber.lower()]
-                    existing_light.close()  # Close the existing connection
-                    self.all_lights[light.serialNumber.lower()] = light
-                    logging.info(f"Updated light info: {light}")
-            
-            self.last_light_discover = time.time()
-            self._log_discovered_lights()
-        except Exception as err:
-            logging.error(f"Error in light discovery: {err}")
-            logging.debug(traceback.format_exc())
-        finally:
-            # Close connections for lights that are no longer present
-            current_serials = set(light.serialNumber.lower() for light in discovered_lights)
-            for serial, light in list(self.all_lights.items()):
-                if serial not in current_serials:
-                    light.close()
-                    del self.all_lights[serial]
-                    logging.info(f"Removed light: {light}")
-            gc.collect()  # Force garbage collection
+        with self.discovery_lock:
+            logging.info("Starting to discover lights...")
+            try:
+                discovered_lights = discover(timeout=5, retry_count=3)
+                for light in discovered_lights:
+                    if light.serialNumber.lower() not in self.all_lights:
+                        self.all_lights[light.serialNumber.lower()] = light
+                        logging.info(f"New light discovered: {light}")
+                    else:
+                        existing_light = self.all_lights[light.serialNumber.lower()]
+                        if existing_light.address != light.address or existing_light.port != light.port:
+                            logging.info(f"Updating info for light {light.serialNumber}")
+                            self.all_lights[light.serialNumber.lower()] = light
+                
+                self.last_light_discover = time.time()
+                self._log_discovered_lights()
+                
+                # Remove lights that are no longer discovered
+                current_serials = set(light.serialNumber.lower() for light in discovered_lights)
+                for serial in list(self.all_lights.keys()):
+                    if serial not in current_serials:
+                        removed_light = self.all_lights.pop(serial)
+                        logging.info(f"Removed light: {removed_light}")
+                        removed_light.close()
+                
+            except Exception as err:
+                logging.error(f"Error in light discovery: {err}")
+                logging.debug(traceback.format_exc())
+            finally:
+                gc.collect()
 
     def _log_discovered_lights(self):
         logging.info(f"Current known lights ({len(self.all_lights)}):")
