@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import paho.mqtt.client as mqtt
 import os
 import logging
@@ -7,7 +5,6 @@ import leglight
 import time
 import sys
 import traceback
-from urllib3 import exceptions
 
 log_level = logging.INFO if not os.getenv('DEBUG', False) else logging.DEBUG
 
@@ -37,15 +34,16 @@ class KeyLight2MQTT:
 
         self.discovery_interval = 60  # Cache results for 1 Minute
         self.cleanup_interval = 300  # Try to connect to lights and remove unavailable ones every 5 minutes
+        self.ping_failures = {}  # Track ping failures for each light
 
     def set_light_power(self, light, state, power="on"):
         try:
             if power == "on" and not state['on']:
                 light.on()
-                logging.debug(f"Light {light.serialNumber} turned on")
+                logging.info(f"Light {light.serialNumber} turned on")
             elif power == "off" and state['on']:
                 light.off()
-                logging.debug(f"Light {light.serialNumber} turned off")
+                logging.info(f"Light {light.serialNumber} turned off")
         except Exception as e:
             logging.error(f"Error setting light {light.serialNumber} power: {e}")
 
@@ -61,33 +59,33 @@ class KeyLight2MQTT:
         value = msg.payload.decode("utf-8")
         logging.info(f"MQTT ordered to change setting on {serial}: {what} to {value}")
         
-        for light in self.all_lights:
-            if serial.lower() != light.serialNumber.lower():
-                continue
+        light = next((l for l in self.all_lights if l.serialNumber.lower() == serial.lower()), None)
+        if not light:
+            logging.warning(f"Light {serial} not found in known lights")
+            return
 
-            try:
-                if not light.ping():
-                    logging.warning(f"Light {light.serialNumber} not responding to ping, skipping...")
-                    continue
+        try:
+            if not self.is_light_responsive(light):
+                logging.warning(f"Light {light.serialNumber} not responding, skipping...")
+                return
 
-                state = light.info()
+            state = light.info()
 
-                if what == "power":
-                    self.set_light_power(light, state, value)
-                elif what == "brightness":
-                    value = int(value)
-                    if state['brightness'] != value:
-                        light.brightness(value)
-                        logging.debug(f"Brightness for {light.serialNumber} set to {value}")
-                elif what == "color":
-                    value = int(value)
-                    if state['temperature'] != value:
-                        light.color(value)
-                        logging.debug(f"Temperature for {light.serialNumber} set to {value}")
-            except Exception as e:
-                logging.error(f"Error processing light {light.serialNumber}: {e}")
-                logging.error(traceback.format_exc())
-                # Don't remove the light, just log the error and continue
+            if what == "power":
+                self.set_light_power(light, state, value)
+            elif what == "brightness":
+                value = int(value)
+                if state['brightness'] != value:
+                    light.brightness(value)
+                    logging.info(f"Brightness for {light.serialNumber} set to {value}")
+            elif what == "color":
+                value = int(value)
+                if state['temperature'] != value:
+                    light.color(value)
+                    logging.info(f"Temperature for {light.serialNumber} set to {value}")
+        except Exception as e:
+            logging.error(f"Error processing light {light.serialNumber}: {e}")
+            logging.error(traceback.format_exc())
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Reconnecting...")
@@ -136,17 +134,24 @@ class KeyLight2MQTT:
         for light in self.all_lights:
             logging.info(f"  {light}")
 
+    def is_light_responsive(self, light):
+        try:
+            return light.ping()
+        except Exception as e:
+            failures = self.ping_failures.get(light.serialNumber, 0) + 1
+            self.ping_failures[light.serialNumber] = failures
+            logging.debug(f"Ping failed for light {light.serialNumber} (failure {failures}): {e}")
+            return failures < 3  # Allow up to 3 consecutive failures before considering unresponsive
+
     def cleanup_lights(self):
         if time.time() - self.last_light_cleanup > self.cleanup_interval:
             logging.info("Cleaning up disconnected lights")
             lights_to_remove = []
             for light in self.all_lights:
-                try:
-                    if not light.ping():
-                        lights_to_remove.append(light)
-                except Exception as e:
-                    logging.error(f"Error pinging light {light.serialNumber}: {e}")
+                if not self.is_light_responsive(light):
                     lights_to_remove.append(light)
+                else:
+                    self.ping_failures[light.serialNumber] = 0  # Reset failure count for responsive lights
             
             for light in lights_to_remove:
                 logging.info(f"Removing unresponsive light {light.serialNumber}")
@@ -171,7 +176,8 @@ class KeyLight2MQTT:
         try:
             while True:
                 self.discover_lights()
-                self.cleanup_lights()
+                if time.time() - self.last_light_cleanup > 60:  # Delay initial cleanup
+                    self.cleanup_lights()
                 self.mqtt_client.loop(timeout=1.0)
         except KeyboardInterrupt:
             logging.info("Keyboard interrupt received. Exiting...")
