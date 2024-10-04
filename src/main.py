@@ -108,7 +108,7 @@ class KeyLight2MQTT:
         # Cache results, discover only when needed (e.g., every 10 minutes)
         lights_before = len(self.all_lights)
         cache_duration = 60  # Cache results for 1 Minute
-        light_cleanup_timeout = 130  # Try to connect to lights and remove the ones not available
+        light_cleanup_timeout = 300  # Try to connect to lights and remove the ones not available
 
         if len(self.all_lights) and time.time() - self.last_light_cleanup > light_cleanup_timeout:
             lights_to_remove = []
@@ -127,6 +127,8 @@ class KeyLight2MQTT:
                 # Remove lights from list
                 self.all_lights.pop(light)
 
+            self.last_light_cleanup = time.time()
+        
         # Only discover if cache is empty or older than cache_duration
         if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
             logging.debug("Starting to discover lights...")
