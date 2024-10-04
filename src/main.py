@@ -7,6 +7,7 @@ import leglight
 import time
 import sys
 import traceback
+import urllib3.exceptions
 
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
@@ -69,23 +70,29 @@ class KeyLight2MQTT:
             try:
                 # Fetch current light state
                 state = light.info()
+            except urllib3.exceptions.MaxRetryError:
+                self.last_light_discover = time.time() - 30
+                logging.warning(f"Unable to connecto to light, skipping.")
+                continue
 
-                if what == "power":
-                    self.set_light_power(light, state, value)
-                elif what == "brightness":
-                    value = int(value)
-                    if state['brightness'] != value:
-                        light.brightness(value)
-                        logging.debug(f"Brightness to {value}")
-                elif what == "color":
-                    value = int(value)
-                    if state['temperature'] != value:
-                        light.color(value)
-                        logging.debug(f"Temperature to {value}")
             except Exception as e:
                 # Force redetection on next loop, since we probably lost a light
                 self.last_light_discover = time.time() - 30
                 logging.error(f"Unknown exception caught:\n{traceback.format_exc()}")
+                continue  # Skip on error
+
+            if what == "power":
+                self.set_light_power(light, state, value)
+            elif what == "brightness":
+                value = int(value)
+                if state['brightness'] != value:
+                    light.brightness(value)
+                    logging.debug(f"Brightness to {value}")
+            elif what == "color":
+                value = int(value)
+                if state['temperature'] != value:
+                    light.color(value)
+                    logging.debug(f"Temperature to {value}")
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
