@@ -9,16 +9,13 @@ import sys
 import traceback
 from urllib3 import exceptions
 
-log_level = logging.INFO
-if os.getenv('DEBUG', False):
-    log_level = logging.DEBUG
+log_level = logging.INFO if not os.getenv('DEBUG', False) else logging.DEBUG
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-7s %(message)s',
-    datefmt='%Y-%d-%m %H:%M:%S',
+    datefmt='%Y-%m-%d %H:%M:%S',
     level=log_level
 )
-
 
 class KeyLight2MQTT:
 
@@ -36,195 +33,146 @@ class KeyLight2MQTT:
 
         self.all_lights = []
         self.last_light_discover = 0
-
         self.last_light_cleanup = 0
 
+        self.discovery_interval = 60  # Cache results for 1 Minute
+        self.cleanup_interval = 300  # Try to connect to lights and remove unavailable ones every 5 minutes
+
     def set_light_power(self, light, state, power="on"):
-        if power == "on":
-            if not state['on']:
+        try:
+            if power == "on" and not state['on']:
                 light.on()
-                logging.debug("Light on")
-        else:
-            if state['on']:
+                logging.debug("Light turned on")
+            elif power == "off" and state['on']:
                 light.off()
-                logging.debug("Light off")
+                logging.debug("Light turned off")
+        except Exception as e:
+            logging.error(f"Error setting light power: {e}")
 
     def mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
         logging.info(f"MQTT: Connected with result code {rc}")
-
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
         topic = f"{self.mqtt_base_topic}/set/#"
         logging.info(f"MQTT: Subscribing to {topic}")
         client.subscribe(topic)
 
     def mqtt_on_message(self, client, userdata, msg):
         logging.debug(f"MQTT: Msg received on <{msg.topic}>: <{msg.payload}>")
-        what = msg.topic.split("/")[-1]
-        serial = msg.topic.split("/")[-2]
+        what, serial = msg.topic.split("/")[-1], msg.topic.split("/")[-2]
         value = msg.payload.decode("utf-8")
         logging.info(f"MQTT ordered to change setting on {serial}: {what} to {value}")
+        
         lights_to_remove = []
         for light in self.all_lights:
-            # if this light alredy is in the ingore list, skip it
-            if light in lights_to_remove:
+            if light in lights_to_remove or serial.lower() != light.serialNumber.lower():
                 continue
-            
-            if serial.lower() != light.serialNumber.lower():
-                continue  # Skip if wrong light
 
-            # This is pretty dirty, but leglight does not hanle requests error it seems
-            if light.ping():
-                # Fetch current light state
+            try:
+                if not light.ping():
+                    lights_to_remove.append(light)
+                    continue
+
                 state = light.info()
-            else:
-                # The light is no longer available
+
+                if what == "power":
+                    self.set_light_power(light, state, value)
+                elif what == "brightness":
+                    value = int(value)
+                    if state['brightness'] != value:
+                        light.brightness(value)
+                        logging.debug(f"Brightness set to {value}")
+                elif what == "color":
+                    value = int(value)
+                    if state['temperature'] != value:
+                        light.color(value)
+                        logging.debug(f"Temperature set to {value}")
+            except Exception as e:
+                logging.error(f"Error processing light {light.serialNumber}: {e}")
                 lights_to_remove.append(light)
-                continue  # Skip on error
 
-            if what == "power":
-                self.set_light_power(light, state, value)
-            elif what == "brightness":
-                value = int(value)
-                if state['brightness'] != value:
-                    light.brightness(value)
-                    logging.debug(f"Brightness to {value}")
-            elif what == "color":
-                value = int(value)
-                if state['temperature'] != value:
-                    light.color(value)
-                    logging.debug(f"Temperature to {value}")
-
-            for light in list(set(lights_to_remove)):
-                logging.info(f"Removing light {light.serialNumber}")
-                # Remove lights from list
-                self.all_lights.remove(light)
+        for light in set(lights_to_remove):
+            logging.info(f"Removing light {light.serialNumber}")
+            self.all_lights.remove(light)
 
     def mqtt_on_disconnect(self, client, userdata, rc):
-        logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
-        sys.exit(1)
+        logging.warning(f"MQTT: Disconnected with result code {rc}. Reconnecting...")
+        while True:
+            try:
+                client.reconnect()
+                break
+            except Exception as e:
+                logging.error(f"Reconnection failed: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
 
     def discover_lights(self):
-        # Cache results, discover only when needed (e.g., every 10 minutes)
-        lights_before = len(self.all_lights)
-        cache_duration = 60  # Cache results for 1 Minute
-        light_cleanup_timeout = 300  # Try to connect to lights and remove the ones not available
-
-        if len(self.all_lights) and time.time() - self.last_light_cleanup > light_cleanup_timeout:
-            logging.info("Searching for disconnected lights")
-            lights_to_remove = []
-            for light in self.all_lights:
-                # if this light alredy is in the ingore list, skip it
-                if not light.ping():
-                    # Some error connecting to the light. Lets remove it and continue
-                    lights_to_remove.append(light)
-
-            for light in lights_to_remove:
-                logging.info(f"Removing light {light.serialNumber}")
-                # Remove lights from list
-                self.all_lights.remove(light)
-
-            self.last_light_cleanup = time.time()
-        
-        # Only discover if cache is empty or older than cache_duration
-        if not self.all_lights or time.time() - self.last_light_discover > cache_duration:
+        if (not self.all_lights or 
+            time.time() - self.last_light_discover > self.discovery_interval):
             logging.debug("Starting to discover lights...")
             try:
-                discovered_lights = leglight.discover(2)  # Time to wait for discovery
+                discovered_lights = leglight.discover(2)
                 self.last_light_discover = time.time()
 
-                # Merge new lights with existing lights, removing duplicates based on serial number
                 all_serials = {light.serialNumber.lower() for light in self.all_lights}
                 for new_light in discovered_lights:
                     if new_light.serialNumber.lower() not in all_serials:
                         self.all_lights.append(new_light)
                         all_serials.add(new_light.serialNumber.lower())
+                    else:
+                        self._update_existing_light(new_light)
 
-                    # Check if existing lights have new infos
-                    for existing_light in self.all_lights:
-                        if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
-                            run_serial = new_light.serialNumber
-                            logging.debug(f"Checking existing light infos for serial {run_serial}")
-                            replace_light = False
-                            if existing_light.address != new_light.address:
-                                logging.debug(f"Address for {run_serial} changed from {existing_light.address} to {new_light.address}")
-                                replace_light = True
-                            if existing_light.port != new_light.port:
-                                logging.debug(f"Port for {run_serial} changed from {existing_light.port} to {new_light.port}")
-                                replace_light = True
-
-                            if replace_light:
-                                logging.info(f"Infos for {run_serial} changed, updating light")
-                                self.all_lights.remove(existing_light)
-                                self.all_lights.append(new_light)
-
-                if lights_before != len(self.all_lights):
-                    logging.info(f"Found {len(self.all_lights)} Elgato lights:")
-                    for light in self.all_lights:
-                        logging.info(f"  {light}")
-
-            except OSError as err:
-                self.last_light_discover = time.time() - 30  # Retry sooner if error occurs
-                logging.error(f"OS error: {err}")
-                logging.error("Critical error in light discovery, exiting...")
-                sys.exit(1)  # Exit to trigger restart in systemd
+                self._log_discovered_lights()
+            except Exception as err:
+                self.last_light_discover = time.time() - 30
+                logging.error(f"Error in light discovery: {err}")
         else:
             logging.debug("Using cached lights, skipping discovery.")
 
-    # def discover_lights(self):
-    #     lights_before = len(self.all_lights)
-    #     if time.time() - self.last_light_discover > 60:
-    #         logging.debug("Starting to discover lights...")
-    #         try:
-    #             self.all_lights = leglight.discover(2)
-    #             self.last_light_discover = time.time()
+    def _update_existing_light(self, new_light):
+        for existing_light in self.all_lights:
+            if existing_light.serialNumber.lower() == new_light.serialNumber.lower():
+                if (existing_light.address != new_light.address or 
+                    existing_light.port != new_light.port):
+                    logging.info(f"Updating info for light {new_light.serialNumber}")
+                    self.all_lights.remove(existing_light)
+                    self.all_lights.append(new_light)
 
-    #             if lights_before != len(self.all_lights):
-    #                 logging.info("Found %s Elgato lights:" % len(self.all_lights))
-    #                 for light in self.all_lights:
-    #                     logging.info("  %s" % light)
+    def _log_discovered_lights(self):
+        logging.info(f"Found {len(self.all_lights)} Elgato lights:")
+        for light in self.all_lights:
+            logging.info(f"  {light}")
 
-    #         except OSError as err:
-    #             self.last_light_discover = time.time() - 30
-    #             logging.error("OS error: {0}".format(err))
-    
+    def cleanup_lights(self):
+        if time.time() - self.last_light_cleanup > self.cleanup_interval:
+            logging.info("Cleaning up disconnected lights")
+            self.all_lights = [light for light in self.all_lights if light.ping()]
+            self.last_light_cleanup = time.time()
+
     def run(self):
         if self.mqtt_user:
             self.mqtt_client.username_pw_set(self.mqtt_user, self.mqtt_password)
 
         while True:
-            logging.info("Waiting for MQTT server...")
-
-            connected = False
-            while not connected:
-                try:
-                    self.mqtt_client.connect(self.mqtt_server, self.mqtt_port, 60)
-                    connected = True
-                    logging.info("Connection successful")
-                except ConnectionRefusedError:
-                    logging.error("Failed to connect to MQTT server, retrying in 3 seconds...")
-                    time.sleep(3)
-                except OSError as e:
-                    logging.error(f"MQTT connection OSError: {e.message}, retrying in 3 seconds...")
-                    time.sleep(3)
-                except Exception as e:
-                    logging.error(f"Unknown exception caught:\n{traceback.format_exc()}\n retrying in 3 seconds...")
-                    time.sleep(3)
-
+            logging.info("Connecting to MQTT server...")
             try:
-                while True:
-                    self.discover_lights()
-                    return_value = self.mqtt_client.loop()
-                    if return_value:
-                        logging.error(f"MQTT client loop returned <{return_value}>. Exiting...")
-                        sys.exit(1)  # Exit on critical MQTT loop errors
+                self.mqtt_client.connect(self.mqtt_server, self.mqtt_port, 60)
+                logging.info("Connection successful")
+                break
             except Exception as e:
-                logging.error(f"Unhandled exception occurred: {e}\n{traceback.format_exc()}")
-                sys.exit(1)  # Exit on unexpected exceptions
-            finally:
-                self.mqtt_client.disconnect()
-                connected = False
+                logging.error(f"Failed to connect to MQTT server: {e}. Retrying in 5 seconds...")
+                time.sleep(5)
 
+        try:
+            while True:
+                self.discover_lights()
+                self.cleanup_lights()
+                self.mqtt_client.loop(timeout=1.0)
+        except KeyboardInterrupt:
+            logging.info("Keyboard interrupt received. Exiting...")
+        except Exception as e:
+            logging.error(f"Unhandled exception occurred: {e}\n{traceback.format_exc()}")
+        finally:
+            self.mqtt_client.disconnect()
+            for light in self.all_lights:
+                light.close()
 
 if __name__ == "__main__":
     kl = KeyLight2MQTT()
