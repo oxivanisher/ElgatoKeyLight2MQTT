@@ -12,12 +12,11 @@ class LegLight:
         self.base_url = f"http://{address}:{port}"
         
         self.session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100)
+        adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100, max_retries=3)
         self.session.mount('http://', adapter)
         self.timeout = 5
 
         self._get_accessory_info()
-        self.info()
 
     def _get_accessory_info(self):
         try:
@@ -31,34 +30,41 @@ class LegLight:
             raise
 
     def __repr__(self):
-        return f"Elgato Light {self.serialNumber} @ {self.address}:{self.port}"
+        return f"Elgato Light {getattr(self, 'serialNumber', 'Unknown')} @ {self.address}:{self.port}"
 
-    def _send_request(self, endpoint: str, data: dict) -> dict:
+    def _send_request(self, endpoint: str, data: dict = None, method: str = 'GET') -> dict:
+        url = f"{self.base_url}/{endpoint}"
         try:
-            res = self.session.put(f"{self.base_url}/{endpoint}", json=data, timeout=self.timeout)
+            if method == 'GET':
+                res = self.session.get(url, timeout=self.timeout)
+            elif method == 'PUT':
+                res = self.session.put(url, json=data, timeout=self.timeout)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+            
             res.raise_for_status()
             return res.json()
         except requests.exceptions.RequestException as e:
-            logging.error(f"Error sending request to {self.address}: {e}")
+            logging.error(f"Error sending {method} request to {url}: {e}")
             raise
 
     def on(self) -> None:
         logging.debug(f"Turning on {self.displayName}")
         data = {"lights": [{"on": 1}]}
-        response = self._send_request("elgato/lights", data)
+        response = self._send_request("elgato/lights", data, method='PUT')
         self.isOn = response["lights"][0]["on"]
 
     def off(self) -> None:
         logging.debug(f"Turning off {self.displayName}")
         data = {"lights": [{"on": 0}]}
-        response = self._send_request("elgato/lights", data)
+        response = self._send_request("elgato/lights", data, method='PUT')
         self.isOn = response["lights"][0]["on"]
 
     def brightness(self, level: int) -> None:
         if 0 <= level <= 100:
             logging.debug(f"Setting brightness {level} on {self.displayName}")
             data = {"lights": [{"brightness": level}]}
-            response = self._send_request("elgato/lights", data)
+            response = self._send_request("elgato/lights", data, method='PUT')
             self.isBrightness = response["lights"][0]["brightness"]
         else:
             logging.warning("INVALID BRIGHTNESS LEVEL - Must be 0-100")
@@ -67,7 +73,7 @@ class LegLight:
         if 2900 <= temp <= 7000:
             logging.debug(f"Setting color {temp}k on {self.displayName}")
             data = {"lights": [{"temperature": self.colorFit(temp)}]}
-            response = self._send_request("elgato/lights", data)
+            response = self._send_request("elgato/lights", data, method='PUT')
             self.isTemperature = self.postFit(response["lights"][0]["temperature"])
         else:
             logging.warning("INVALID COLOR TEMP - Must be 2900-7000")
@@ -75,9 +81,7 @@ class LegLight:
     def info(self) -> dict:
         logging.debug(f"Getting info for {self.displayName}")
         try:
-            res = self.session.get(f"{self.base_url}/elgato/lights", timeout=self.timeout)
-            res.raise_for_status()
-            status = res.json()["lights"][0]
+            status = self._send_request("elgato/lights")["lights"][0]
             self.isOn = status["on"]
             self.isBrightness = status["brightness"]
             self.isTemperature = self.postFit(status["temperature"])
@@ -91,20 +95,15 @@ class LegLight:
             return {"on": 0, "brightness": 0, "temperature": 2900}
 
     def ping(self) -> bool:
-        # First, try a socket connection
         try:
+            # First, try a socket connection
             with socket.create_connection((self.address, self.port), timeout=2):
                 pass
-        except Exception as e:
-            logging.debug(f"Socket connection failed for light at {self.address}: {e}")
-            return False
-
-        # If socket connection succeeds, try the API endpoint
-        try:
-            response = self.session.head(f"{self.base_url}/elgato/accessory-info", timeout=self.timeout)
-            return response.status_code == 200
-        except requests.exceptions.RequestException as e:
-            logging.error(f"API endpoint check failed for light at {self.address}: {e}")
+            # If socket connection succeeds, try the API endpoint
+            self._send_request("elgato/accessory-info")
+            return True
+        except (socket.error, requests.exceptions.RequestException) as e:
+            logging.debug(f"Ping failed for light at {self.address}: {e}")
             return False
 
     def colorFit(self, val: int) -> int:
@@ -116,19 +115,27 @@ class LegLight:
     def close(self):
         self.session.close()
 
-    # Helper methods for increasing/decreasing brightness and color
-    def incBrightness(self, amount: int) -> None:
-        self.info()
-        self.brightness(min(self.isBrightness + amount, 100))
+def discover(timeout: int = 1) -> list:
+    import zeroconf
+    import ipaddress
+    import time
 
-    def decBrightness(self, amount: int) -> None:
-        self.info()
-        self.brightness(max(self.isBrightness - amount, 0))
+    class MyListener:
+        def __init__(self):
+            self.lights = []
 
-    def incColor(self, amount: int) -> None:
-        self.info()
-        self.color(min(self.isTemperature + amount, 7000))
+        def add_service(self, zc, type, name):
+            info = zc.get_service_info(type, name)
+            if info:
+                address = str(ipaddress.ip_address(info.addresses[0]))
+                port = info.port
+                self.lights.append(LegLight(address, port))
 
-    def decColor(self, amount: int) -> None:
-        self.info()
-        self.color(max(self.isTemperature - amount, 2900))
+    zc = zeroconf.Zeroconf()
+    listener = MyListener()
+    browser = zeroconf.ServiceBrowser(zc, "_elg._tcp.local.", listener)
+    
+    time.sleep(timeout)
+    zc.close()
+    
+    return listener.lights
