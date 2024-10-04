@@ -129,9 +129,9 @@ class LegLight:
         except requests.exceptions.RequestException as e:
             logging.error(f"Error retrieving light info from {self.address}: {e}")
             return {
-                "on": -1,
-                "brightness": -1,
-                "temperature": -1,
+                "on": 0,
+                "brightness": 0,
+                "temperature": 2900,
             }
 
     def ping(self) -> bool:
