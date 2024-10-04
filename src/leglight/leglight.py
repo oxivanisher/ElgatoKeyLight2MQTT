@@ -1,6 +1,7 @@
 import requests
 import logging
 import json
+import socket
 
 class LegLight:
     def __init__(self, address: str, port: int, name: str = "", server: str = ""):
@@ -90,11 +91,20 @@ class LegLight:
             return {"on": 0, "brightness": 0, "temperature": 2900}
 
     def ping(self) -> bool:
+        # First, try a socket connection
+        try:
+            with socket.create_connection((self.address, self.port), timeout=2):
+                pass
+        except Exception as e:
+            logging.debug(f"Socket connection failed for light at {self.address}: {e}")
+            return False
+
+        # If socket connection succeeds, try the API endpoint
         try:
             response = self.session.head(f"{self.base_url}/elgato/accessory-info", timeout=self.timeout)
             return response.status_code == 200
         except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to ping light at {self.address}: {e}")
+            logging.error(f"API endpoint check failed for light at {self.address}: {e}")
             return False
 
     def colorFit(self, val: int) -> int:
