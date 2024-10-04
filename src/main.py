@@ -64,21 +64,27 @@ class KeyLight2MQTT:
             if serial.lower() != light.serialNumber.lower():
                 continue  # Skip if wrong light
 
-            # Fetch current light state
-            state = light.info()
+            # This is pretty dirty, but leglight does not hanle requests error it seems
+            try:
+                # Fetch current light state
+                state = light.info()
 
-            if what == "power":
-                self.set_light_power(light, state, value)
-            elif what == "brightness":
-                value = int(value)
-                if state['brightness'] != value:
-                    light.brightness(value)
-                    logging.debug(f"Brightness to {value}")
-            elif what == "color":
-                value = int(value)
-                if state['temperature'] != value:
-                    light.color(value)
-                    logging.debug(f"Temperature to {value}")
+                if what == "power":
+                    self.set_light_power(light, state, value)
+                elif what == "brightness":
+                    value = int(value)
+                    if state['brightness'] != value:
+                        light.brightness(value)
+                        logging.debug(f"Brightness to {value}")
+                elif what == "color":
+                    value = int(value)
+                    if state['temperature'] != value:
+                        light.color(value)
+                        logging.debug(f"Temperature to {value}")
+            except Exception as e:
+                # Force redetection on next loop, since we probably lost a light
+                self.last_light_discover = time.time() - 30
+                logging.error(f"Unknown exception caught:\n{traceback.format_exc()}")
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}")
