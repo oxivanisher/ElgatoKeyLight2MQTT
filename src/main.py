@@ -110,7 +110,7 @@ class KeyLight2MQTT:
         cache_duration = 60  # Cache results for 1 Minute
         light_cleanup_timeout = 130  # Try to connect to lights and remove the ones not available
 
-        if len(self.all_lights) and time.time() - self.self.last_light_cleanup > light_cleanup_timeout:
+        if len(self.all_lights) and time.time() - self.last_light_cleanup > light_cleanup_timeout:
             lights_to_remove = []
             for light in self.all_lights:
                 # if this light alredy is in the ingore list, skip it
