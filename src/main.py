@@ -88,7 +88,8 @@ class KeyLight2MQTT:
                 logging.error(f"Unknown exception caught:\n{traceback.format_exc()}")
 
     def mqtt_on_disconnect(self, client, userdata, rc):
-        logging.warning(f"MQTT: Disconnected with result code {rc}")
+        logging.warning(f"MQTT: Disconnected with result code {rc}. Exiting app to get into reconnection loop.")
+        sys.exit(1)
 
     # def discover_lights(self):
     #     # Cache results, discover only when needed (e.g., every 10 minutes)
