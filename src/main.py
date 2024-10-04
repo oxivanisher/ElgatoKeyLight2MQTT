@@ -42,12 +42,12 @@ class KeyLight2MQTT:
         try:
             if power == "on" and not state['on']:
                 light.on()
-                logging.debug("Light turned on")
+                logging.debug(f"Light {light.serialNumber} turned on")
             elif power == "off" and state['on']:
                 light.off()
-                logging.debug("Light turned off")
+                logging.debug(f"Light {light.serialNumber} turned off")
         except Exception as e:
-            logging.error(f"Error setting light power: {e}")
+            logging.error(f"Error setting light {light.serialNumber} power: {e}")
 
     def mqtt_on_connect(self, client, userdata, flags, rc, properties=None):
         logging.info(f"MQTT: Connected with result code {rc}")
@@ -61,14 +61,13 @@ class KeyLight2MQTT:
         value = msg.payload.decode("utf-8")
         logging.info(f"MQTT ordered to change setting on {serial}: {what} to {value}")
         
-        lights_to_remove = []
         for light in self.all_lights:
-            if light in lights_to_remove or serial.lower() != light.serialNumber.lower():
+            if serial.lower() != light.serialNumber.lower():
                 continue
 
             try:
                 if not light.ping():
-                    lights_to_remove.append(light)
+                    logging.warning(f"Light {light.serialNumber} not responding to ping, skipping...")
                     continue
 
                 state = light.info()
@@ -79,19 +78,16 @@ class KeyLight2MQTT:
                     value = int(value)
                     if state['brightness'] != value:
                         light.brightness(value)
-                        logging.debug(f"Brightness set to {value}")
+                        logging.debug(f"Brightness for {light.serialNumber} set to {value}")
                 elif what == "color":
                     value = int(value)
                     if state['temperature'] != value:
                         light.color(value)
-                        logging.debug(f"Temperature set to {value}")
+                        logging.debug(f"Temperature for {light.serialNumber} set to {value}")
             except Exception as e:
                 logging.error(f"Error processing light {light.serialNumber}: {e}")
-                lights_to_remove.append(light)
-
-        for light in set(lights_to_remove):
-            logging.info(f"Removing light {light.serialNumber}")
-            self.all_lights.remove(light)
+                logging.error(traceback.format_exc())
+                # Don't remove the light, just log the error and continue
 
     def mqtt_on_disconnect(self, client, userdata, rc):
         logging.warning(f"MQTT: Disconnected with result code {rc}. Reconnecting...")
@@ -143,7 +139,19 @@ class KeyLight2MQTT:
     def cleanup_lights(self):
         if time.time() - self.last_light_cleanup > self.cleanup_interval:
             logging.info("Cleaning up disconnected lights")
-            self.all_lights = [light for light in self.all_lights if light.ping()]
+            lights_to_remove = []
+            for light in self.all_lights:
+                try:
+                    if not light.ping():
+                        lights_to_remove.append(light)
+                except Exception as e:
+                    logging.error(f"Error pinging light {light.serialNumber}: {e}")
+                    lights_to_remove.append(light)
+            
+            for light in lights_to_remove:
+                logging.info(f"Removing unresponsive light {light.serialNumber}")
+                self.all_lights.remove(light)
+            
             self.last_light_cleanup = time.time()
 
     def run(self):
