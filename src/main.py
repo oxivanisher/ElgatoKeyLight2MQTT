@@ -6,6 +6,7 @@ import logging
 import leglight
 import time
 import sys
+import traceback
 
 log_level = logging.INFO
 if os.getenv('DEBUG', False):
