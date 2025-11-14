@@ -34,16 +34,17 @@ def discover(timeout: int = 5, retry_count: int = 3) -> list:
 
     for attempt in range(retry_count):
         zc = None
+        browser = None
         try:
             zc = Zeroconf()
             listener = TheListener()
             browser = ServiceBrowser(zc, "_elg._tcp.local.", listener)
-            
+
             start = time()
             while time() - start < timeout:
                 if discovery_complete.wait(0.1):
                     break
-            
+
             if lights:
                 logging.info(f"Discovery completed. Found {len(lights)} lights.")
                 break
@@ -52,9 +53,11 @@ def discover(timeout: int = 5, retry_count: int = 3) -> list:
         except Exception as e:
             logging.error(f"Error during discovery: {e}")
         finally:
+            if browser:
+                browser.cancel()
             if zc:
                 zc.close()
-        
+
         sleep(1)  # Wait a bit before retrying
 
     if not lights:
